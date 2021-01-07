@@ -6,6 +6,7 @@ import {
   Field,
   Ctx,
   ObjectType,
+  Query,
 } from "type-graphql";
 import argon2 from "argon2";
 
@@ -46,13 +47,29 @@ class UserResponse {
 @Resolver()
 export class UserResolver {
   /**
+   * @CurrentUser
+   */
+  @Query(() => User, { nullable: true })
+  async currentUser(@Ctx() { req, em }: MyContext): Promise<User | null> {
+    // Not logged in
+    if (!req.session.userId) {
+      return null;
+    }
+
+    const user = await em.findOne(User, { id: req.session.userId });
+
+    if (!user) return null;
+
+    return user;
+  }
+  /**
    * @Register
    * @param options UserNamePasswordInput
    */
   @Mutation(() => UserResponse)
   async register(
     @Arg("options") options: UserNamePasswordInput,
-    @Ctx() { em }: MyContext
+    @Ctx() { em, req }: MyContext
   ): Promise<UserResponse> {
     const foundUser = await em.findOne(User, { username: options.username });
     if (foundUser) {
@@ -97,6 +114,10 @@ export class UserResolver {
     });
 
     await em.persistAndFlush(user);
+
+    // Automatially log in user after registering.
+    req.session.userId = user.id;
+
     return { user };
   }
 
@@ -107,7 +128,7 @@ export class UserResolver {
   @Mutation(() => UserResponse, { nullable: true })
   async login(
     @Arg("options") options: UserNamePasswordInput,
-    @Ctx() { em }: MyContext
+    @Ctx() { em, req }: MyContext
   ): Promise<UserResponse> {
     // Try finding an user based on the username
     const user = await em.findOne(User, { username: options.username });
@@ -137,6 +158,8 @@ export class UserResolver {
         ],
       };
     }
+
+    req.session.userId = user.id;
 
     // If user exist and password is valid, return UserResponse object
     // with user(type User) and no errors(type FieldError[])
