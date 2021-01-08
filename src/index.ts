@@ -12,6 +12,7 @@ import { HelloResolver } from "./resolvers/hello";
 import { PostResolver } from "./resolvers/post";
 import { UserResolver } from "./resolvers/user";
 import { MyContext } from "./types";
+import cors from "cors";
 
 declare module "express-session" {
   interface Session {
@@ -48,6 +49,8 @@ const main = async () => {
     })
   );
 
+  app.use(cors({ origin: "http://localhost:3000", credentials: true }));
+
   const apolloServer = new ApolloServer({
     schema: await buildSchema({
       resolvers: [HelloResolver, PostResolver, UserResolver],
@@ -56,7 +59,10 @@ const main = async () => {
     context: ({ req, res }): MyContext => ({ em: orm.em, req, res }),
   });
 
-  apolloServer.applyMiddleware({ app });
+  apolloServer.applyMiddleware({
+    app,
+    cors: false,
+  });
 };
 
 main().catch((err) => console.error(err));
