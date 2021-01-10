@@ -12,6 +12,7 @@ import argon2 from "argon2";
 
 import { User } from "../entities/User";
 import { MyContext } from "../types";
+// import { EntityManager } from "@mikro-orm/postgresql;
 
 @InputType()
 class UserNamePasswordInput {
@@ -115,6 +116,22 @@ export class UserResolver {
 
     await em.persistAndFlush(user);
 
+    // ---------
+    // This was made in the tutorial because `persistAndFlush` was giving an error - mine works fine so I'm leaving this off
+    // let user
+    // try {
+    //   const response = await (em as EntityManager).createQueryBuilder(User).getKnexQuery().insert({
+    //     username: options.username,
+    //     password: hashedPassword,
+    //     created_at: new Date(),
+    //     updated_at: new Date()
+    //   }).returning("*");
+    //   user = response[0]
+    // } catch (err) {
+    //   console.log("ERROR ----- ", err);
+    // }
+    // ---------
+
     // Automatially log in user after registering.
     req.session.userId = user.id;
 
@@ -139,8 +156,8 @@ export class UserResolver {
       return {
         errors: [
           {
-            field: "login",
-            message: "Wrong username or password",
+            field: "username",
+            message: "Username doesn't exist.",
           },
         ],
       };
@@ -153,7 +170,7 @@ export class UserResolver {
         errors: [
           {
             field: "password",
-            message: "Password is incorrect",
+            message: "Password is incorrect.",
           },
         ],
       };
