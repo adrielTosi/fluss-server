@@ -12,6 +12,7 @@ import argon2 from "argon2";
 
 import { User } from "../entities/User";
 import { MyContext } from "../types";
+import { COOKIE_NAME } from "../constants";
 // import { EntityManager } from "@mikro-orm/postgresql;
 
 @InputType()
@@ -183,5 +184,19 @@ export class UserResolver {
     return {
       user,
     };
+  }
+
+  @Mutation(() => Boolean)
+  async logout(@Ctx() { req, res }: MyContext) {
+    return new Promise((resolve) =>
+      req.session.destroy((err) => {
+        res.clearCookie(COOKIE_NAME); // ? Should the cookie be deleted even if the session was not destroyed. If yes, should be move to below the if statement
+        if (err) {
+          console.log(err);
+          resolve(false);
+        }
+        resolve(true);
+      })
+    );
   }
 }

@@ -7,7 +7,7 @@ import { buildSchema } from "type-graphql";
 import { ApolloServer } from "apollo-server-express";
 import "reflect-metadata";
 
-import { __prod__ } from "./constants";
+import { COOKIE_NAME, __prod__ } from "./constants";
 import { HelloResolver } from "./resolvers/hello";
 import { PostResolver } from "./resolvers/post";
 import { UserResolver } from "./resolvers/user";
@@ -35,7 +35,7 @@ const main = async () => {
 
   app.use(
     session({
-      name: "fluss.sid",
+      name: COOKIE_NAME,
       store: new RedisStore({ client: redisClient, disableTouch: true }),
       secret: "Sll2o955ltoSsslOejnn4E%",
       cookie: {
