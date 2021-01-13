@@ -16,6 +16,10 @@ export class User {
   @Property({ type: "date", onUpdate: () => new Date() })
   updatedAt = new Date();
 
+  @Field()
+  @Property({ type: "text", unique: true })
+  email!: string;
+
   // notice `username` must be unique
   @Field()
   @Property({ type: "text", unique: true })

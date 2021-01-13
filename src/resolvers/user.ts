@@ -9,14 +9,18 @@ import {
   Query,
 } from "type-graphql";
 import argon2 from "argon2";
+import { v4 as uuid } from "uuid";
 
 import { User } from "../entities/User";
 import { MyContext } from "../types";
-import { COOKIE_NAME } from "../constants";
+import { COOKIE_NAME, FORGOT_PASSWORD_PREFIX } from "../constants";
+import { sendEmail } from "../utils/sendEmail";
 // import { EntityManager } from "@mikro-orm/postgresql;
 
 @InputType()
-class UserNamePasswordInput {
+class UsernamePasswordInput {
+  @Field()
+  email: string;
   @Field()
   username: string;
   @Field()
@@ -70,10 +74,12 @@ export class UserResolver {
    */
   @Mutation(() => UserResponse)
   async register(
-    @Arg("options") options: UserNamePasswordInput,
+    @Arg("options") options: UsernamePasswordInput,
     @Ctx() { em, req }: MyContext
   ): Promise<UserResponse> {
     const foundUser = await em.findOne(User, { username: options.username });
+    // todo: Add validation for email -> add actual validation library
+
     if (foundUser) {
       return {
         errors: [
@@ -112,6 +118,7 @@ export class UserResolver {
     // Create user
     const user = em.create(User, {
       username: options.username,
+      email: options.email,
       password: hashedPassword,
     });
 
@@ -145,19 +152,25 @@ export class UserResolver {
    */
   @Mutation(() => UserResponse, { nullable: true })
   async login(
-    @Arg("options") options: UserNamePasswordInput,
+    @Arg("usernameOrEmail") usernameOrEmail: string,
+    @Arg("password") password: string,
     @Ctx() { em, req }: MyContext
   ): Promise<UserResponse> {
     // Try finding an user based on the username
-    const user = await em.findOne(User, { username: options.username });
+    const isEmail = usernameOrEmail.includes("@");
+    const user = await em.findOne(
+      User,
+      isEmail ? { email: usernameOrEmail } : { username: usernameOrEmail }
+    );
 
+    // todo: Add validation library
     // If there is no user, return new UserResponse object
     // with errors(type FieldError[]) and no user(type User)
     if (!user) {
       return {
         errors: [
           {
-            field: "username",
+            field: "usernameOrEmail",
             message: "Username doesn't exist.",
           },
         ],
@@ -165,7 +178,7 @@ export class UserResolver {
     }
 
     // Same thing but with invalid password
-    const valid = await argon2.verify(user.password, options.password);
+    const valid = await argon2.verify(user.password, password);
     if (!valid) {
       return {
         errors: [
@@ -198,5 +211,29 @@ export class UserResolver {
         resolve(true);
       })
     );
+  }
+
+  @Mutation(() => Boolean)
+  async resetPassword(
+    @Arg("email") email: string,
+    @Ctx() { em, redis }: MyContext
+  ) {
+    const user = await em.findOne(User, { email });
+    if (!user) {
+      // email not in the database
+      return false;
+    }
+
+    const token = uuid();
+    await redis.set(
+      FORGOT_PASSWORD_PREFIX + token,
+      user.id,
+      "ex",
+      60 * 60 * 24
+    ); // one day
+
+    const content = `<a href="http://localhost:3000/change-password/${token}"></>`;
+    sendEmail(user.email, content);
+    return true;
   }
 }

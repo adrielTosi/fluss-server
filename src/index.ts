@@ -1,5 +1,5 @@
 import express from "express";
-import redis from "redis";
+import Redis from "ioredis";
 import session from "express-session";
 import redisStore from "connect-redis";
 import { MikroORM } from "@mikro-orm/core";
@@ -13,6 +13,7 @@ import { PostResolver } from "./resolvers/post";
 import { UserResolver } from "./resolvers/user";
 import { MyContext } from "./types";
 import cors from "cors";
+import { User } from "./entities/User";
 
 declare module "express-session" {
   interface Session {
@@ -22,6 +23,7 @@ declare module "express-session" {
 
 const main = async () => {
   const orm = await MikroORM.init();
+  await orm.em.nativeDelete(User, {});
   const migrator = orm.getMigrator();
   await migrator.up();
 
@@ -31,12 +33,12 @@ const main = async () => {
   });
 
   const RedisStore = redisStore(session);
-  const redisClient = redis.createClient();
+  const redis = new Redis();
 
   app.use(
     session({
       name: COOKIE_NAME,
-      store: new RedisStore({ client: redisClient, disableTouch: true }),
+      store: new RedisStore({ client: redis as any, disableTouch: true }), // I had to add this `as any` because the types were incompatible https://github.com/tj/connect-redis/issues/300
       secret: "Sll2o955ltoSsslOejnn4E%",
       cookie: {
         maxAge: 1000 * 60 * 60 * 24 * 14, // 14 days
@@ -56,7 +58,7 @@ const main = async () => {
       resolvers: [HelloResolver, PostResolver, UserResolver],
       validate: false,
     }),
-    context: ({ req, res }): MyContext => ({ em: orm.em, req, res }),
+    context: ({ req, res }): MyContext => ({ em: orm.em, req, res, redis }),
   });
 
   apolloServer.applyMiddleware({
