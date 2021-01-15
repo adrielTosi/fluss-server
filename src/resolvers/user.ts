@@ -38,7 +38,6 @@ class FieldError {
 
 /**
  * @UserResponse
- * Response from `login` mutation -
  * It will have either `errors` or `user` field.
  */
 @ObjectType()
@@ -214,7 +213,7 @@ export class UserResolver {
   }
 
   @Mutation(() => Boolean)
-  async resetPassword(
+  async forgotPassword(
     @Arg("email") email: string,
     @Ctx() { em, redis }: MyContext
   ) {
@@ -235,5 +234,90 @@ export class UserResolver {
     const content = `<a href="http://localhost:3000/change-password/${token}"></>`;
     sendEmail(user.email, content);
     return true;
+  }
+
+  @Mutation(() => UserResponse)
+  async changePassword(
+    @Arg("token") token: string,
+    @Arg("newPassword") newPassword: string,
+    @Ctx() { redis, em, req }: MyContext
+  ): Promise<UserResponse> {
+    if (newPassword.length < 3) {
+      return {
+        errors: [
+          {
+            field: "newPassword",
+            message: "Password must be longer than 2 characters.",
+          },
+        ],
+      };
+    }
+    const key = FORGOT_PASSWORD_PREFIX + token;
+    const userId = await redis.get(key);
+    if (!userId) {
+      return {
+        errors: [
+          {
+            field: "token",
+            message: "Token is invalid or expired, please try again.",
+          },
+        ],
+      };
+    }
+
+    const user = await em.findOne(User, { id: parseInt(userId) });
+
+    if (!user) {
+      return {
+        errors: [
+          {
+            field: "token",
+            message: "User no longer exists.",
+          },
+        ],
+      };
+    }
+
+    user.password = await argon2.hash(newPassword);
+    await em.persistAndFlush(user);
+    await redis.del(key);
+    // automatically login user with
+    req.session.userId = user.id;
+
+    return { user };
+  }
+
+  @Mutation(() => UserResponse)
+  async changeUsername(
+    @Arg("newUsername") newUsername: string,
+    @Ctx() { em, req }: MyContext
+  ): Promise<UserResponse> {
+    const user = await em.findOne(User, { id: req.session.userId });
+    if (!user) {
+      return {
+        errors: [
+          {
+            field: "newUsername",
+            message: "Something went wrong, please try again.",
+          },
+        ],
+      };
+    }
+
+    const isTaken = await em.findOne(User, { username: newUsername });
+    if (isTaken) {
+      return {
+        errors: [
+          {
+            field: "newUsername",
+            message: "Username already exists.",
+          },
+        ],
+      };
+    }
+
+    user.username = newUsername;
+    await em.persistAndFlush(user);
+    return { user };
   }
 }

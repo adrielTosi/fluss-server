@@ -13,7 +13,6 @@ import { PostResolver } from "./resolvers/post";
 import { UserResolver } from "./resolvers/user";
 import { MyContext } from "./types";
 import cors from "cors";
-import { User } from "./entities/User";
 
 declare module "express-session" {
   interface Session {
@@ -23,7 +22,6 @@ declare module "express-session" {
 
 const main = async () => {
   const orm = await MikroORM.init();
-  await orm.em.nativeDelete(User, {});
   const migrator = orm.getMigrator();
   await migrator.up();
 
