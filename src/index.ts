@@ -1,11 +1,10 @@
+import "reflect-metadata";
 import express from "express";
 import Redis from "ioredis";
 import session from "express-session";
 import redisStore from "connect-redis";
-import { MikroORM } from "@mikro-orm/core";
 import { buildSchema } from "type-graphql";
 import { ApolloServer } from "apollo-server-express";
-import "reflect-metadata";
 
 import { COOKIE_NAME, __prod__ } from "./constants";
 import { HelloResolver } from "./resolvers/hello";
@@ -14,6 +13,10 @@ import { UserResolver } from "./resolvers/user";
 import { MyContext } from "./types";
 import cors from "cors";
 
+import { createConnection } from "typeorm";
+import { Post } from "./entities/Post";
+import { User } from "./entities/User";
+
 declare module "express-session" {
   interface Session {
     userId: number;
@@ -21,9 +24,16 @@ declare module "express-session" {
 }
 
 const main = async () => {
-  const orm = await MikroORM.init();
-  const migrator = orm.getMigrator();
-  await migrator.up();
+  // const conn = await createConnection({
+  await createConnection({
+    type: "postgres",
+    database: "flussdb",
+    username: "postgres",
+    password: "postgress",
+    logging: true,
+    synchronize: true,
+    entities: [Post, User],
+  });
 
   const app = express();
   app.listen(4000, () => {
@@ -56,7 +66,7 @@ const main = async () => {
       resolvers: [HelloResolver, PostResolver, UserResolver],
       validate: false,
     }),
-    context: ({ req, res }): MyContext => ({ em: orm.em, req, res, redis }),
+    context: ({ req, res }): MyContext => ({ req, res, redis }),
   });
 
   apolloServer.applyMiddleware({
