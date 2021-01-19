@@ -52,6 +52,15 @@ class UserResponse {
 @Resolver()
 export class UserResolver {
   /**
+   *
+   * @AllUsers
+   */
+  @Query(() => [User])
+  async users(): Promise<User[]> {
+    return User.find({});
+  }
+
+  /**
    * @CurrentUser
    */
   @Query(() => User, { nullable: true })

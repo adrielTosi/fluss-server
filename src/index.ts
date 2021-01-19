@@ -5,6 +5,7 @@ import session from "express-session";
 import redisStore from "connect-redis";
 import { buildSchema } from "type-graphql";
 import { ApolloServer } from "apollo-server-express";
+import path from "path";
 
 import { COOKIE_NAME, __prod__ } from "./constants";
 import { HelloResolver } from "./resolvers/hello";
@@ -25,15 +26,20 @@ declare module "express-session" {
 
 const main = async () => {
   // const conn = await createConnection({
-  await createConnection({
+  const typeOrmConn = await createConnection({
     type: "postgres",
     database: "flussdb",
     username: "postgres",
     password: "postgress",
     logging: true,
     synchronize: true,
+    migrations: [path.join(__dirname, "/migrations/*")],
     entities: [Post, User],
   });
+
+  await typeOrmConn.runMigrations();
+
+  // await Post.delete({});
 
   const app = express();
   app.listen(4000, () => {

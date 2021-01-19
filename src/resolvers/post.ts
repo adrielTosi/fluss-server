@@ -4,13 +4,18 @@ import {
   Arg,
   Ctx,
   Field,
+  FieldResolver,
   InputType,
+  Int,
   Mutation,
+  ObjectType,
   Query,
   Resolver,
+  Root,
   UseMiddleware,
 } from "type-graphql";
 import { Post } from "../entities/Post";
+import { getConnection } from "typeorm";
 
 @InputType()
 class PostInput {
@@ -20,14 +25,53 @@ class PostInput {
   text: string;
 }
 
-@Resolver()
+@ObjectType()
+class PaginatedPost {
+  @Field(() => [Post])
+  posts: Post[];
+  @Field()
+  hasMore: boolean;
+}
+
+@Resolver(Post)
 export class PostResolver {
+  @FieldResolver(() => String)
+  textSnippet(@Root() root: Post) {
+    return root.text.slice(0, 80);
+  }
   /**
    * @Posts
+   *
+   * @param limit - How many posts returned per query
+   * @param {timestamp} cursor
+   *
+   * @returns all Posts before the date `cursor` represents
    */
-  @Query(() => [Post])
-  posts(): Promise<Post[]> {
-    return Post.find();
+  @Query(() => PaginatedPost) // todo: Review this, looks not so good being data.posts.posts...
+  async posts(
+    @Arg("limit", () => Int) limit: number,
+    @Arg("cursor", () => String, { nullable: true }) cursor: string | null // actually a date value like `1610814686802`
+  ): Promise<PaginatedPost> {
+    const realLimit = Math.min(50, limit) + 1;
+    const realLimitPlusOne = realLimit + 1;
+
+    const queryBuilder = getConnection()
+      .getRepository(Post)
+      .createQueryBuilder("p")
+      .orderBy(`"createdAt"`, "DESC")
+      .take(realLimitPlusOne);
+
+    if (cursor) {
+      queryBuilder.where('"createdAt" < :cursor', {
+        cursor: new Date(parseInt(cursor)),
+      });
+    }
+    const posts = await queryBuilder.getMany();
+
+    return {
+      posts: posts.slice(0, realLimit),
+      hasMore: posts.length === realLimitPlusOne,
+    };
   }
 
   /**
