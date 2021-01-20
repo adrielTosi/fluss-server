@@ -7,6 +7,8 @@ import {
   Ctx,
   ObjectType,
   Query,
+  FieldResolver,
+  Root,
 } from "type-graphql";
 import argon2 from "argon2";
 import { v4 as uuid } from "uuid";
@@ -49,8 +51,19 @@ class UserResponse {
   user?: User;
 }
 
-@Resolver()
+@Resolver(User)
 export class UserResolver {
+  @FieldResolver(() => String)
+  email(@Root() user: User, @Ctx() { req }: MyContext) {
+    // ? What is exactly this Root? And how does it know the user?
+    // Current user can see their own email
+    if (req.session.userId === user.id) {
+      return user.email;
+    }
+    // Any other email returns empty string
+    return "";
+  }
+
   /**
    *
    * @AllUsers

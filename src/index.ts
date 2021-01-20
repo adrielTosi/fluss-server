@@ -17,6 +17,7 @@ import cors from "cors";
 import { createConnection } from "typeorm";
 import { Post } from "./entities/Post";
 import { User } from "./entities/User";
+import { Fame } from "./entities/Fame";
 
 declare module "express-session" {
   interface Session {
@@ -34,7 +35,7 @@ const main = async () => {
     logging: true,
     synchronize: true,
     migrations: [path.join(__dirname, "/migrations/*")],
-    entities: [Post, User],
+    entities: [Post, User, Fame],
   });
 
   await typeOrmConn.runMigrations();

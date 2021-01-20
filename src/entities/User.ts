@@ -9,6 +9,7 @@ import {
 } from "typeorm";
 import { ObjectType, Field } from "type-graphql";
 import { Post } from "./Post";
+import { Fame } from "./Fame";
 
 @ObjectType()
 @Entity()
@@ -30,6 +31,9 @@ export class User extends BaseEntity {
 
   @OneToMany(() => Post, (post) => post.owner)
   posts: Post[];
+
+  @OneToMany(() => Fame, (fame) => fame.user)
+  fame: Fame[];
 
   @Field(() => String)
   @CreateDateColumn()

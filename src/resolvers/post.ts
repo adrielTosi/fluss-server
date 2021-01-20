@@ -16,6 +16,7 @@ import {
 } from "type-graphql";
 import { Post } from "../entities/Post";
 import { getConnection } from "typeorm";
+import { Fame } from "../entities/Fame";
 
 @InputType()
 class PostInput {
@@ -35,6 +36,40 @@ class PaginatedPost {
 
 @Resolver(Post)
 export class PostResolver {
+  @Mutation(() => Boolean)
+  @UseMiddleware(isLogged)
+  async vote(
+    @Arg("postId", () => Int) postId: number,
+    @Arg("value", () => Int) value: number,
+    @Ctx() { req }: MyContext
+  ) {
+    const isPositiveFame = value !== -1;
+    const realValue = isPositiveFame ? 1 : -1;
+    const { userId } = req.session;
+
+    // await getConnection().query(
+    //   `
+    //   update post
+    //   set "famePoints" = "famePoints" = $1
+    //   where id = $2
+    // `,
+    //   [realValue, postId]
+    // );
+
+    const insertFame = await Fame.insert({ userId, postId, value: realValue });
+    if (!insertFame) return false;
+
+    const postToUpdate = await Post.findOne({ id: postId });
+    if (!postToUpdate) {
+      return false;
+    }
+    if (postToUpdate) {
+      postToUpdate.famePoints = postToUpdate.famePoints + realValue;
+    }
+    await Post.save(postToUpdate);
+    return true;
+  }
+
   @FieldResolver(() => String)
   textSnippet(@Root() root: Post) {
     return root.text.slice(0, 80);
@@ -88,7 +123,6 @@ export class PostResolver {
     // }
     // const posts = await queryBuilder.getMany();
 
-    console.log("posts: ", posts);
     return {
       posts: posts.slice(0, realLimit),
       hasMore: posts.length === realLimitPlusOne,
