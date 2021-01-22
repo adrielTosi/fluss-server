@@ -121,7 +121,11 @@ export class PostResolver {
     const replacements: any[] = [realLimitPlusOne];
 
     if (req.session.userId) replacements.push(req.session.userId);
-    if (cursor) replacements.push(new Date(parseInt(cursor)));
+    let cursorIndex = 3;
+    if (cursor) {
+      replacements.push(new Date(parseInt(cursor)));
+      cursorIndex = replacements.length;
+    }
 
     const posts = await getConnection().query(
       `
@@ -129,15 +133,18 @@ export class PostResolver {
         json_build_object(
           'id', u.id,
           'username', u.username,
-          'email', u.email) as owner,
+          'email', u.email,
+          'createdAt', u."createdAt",
+          'updatedAt', u."updatedAt"
+          ) as owner,
         ${
           req.session.userId
             ? `(select value from fame where "userId" = $2 and "postId" = p.id) "voteStatus"`
-            : "null as 'voteStatus'"
+            : `null as "voteStatus"`
         }
         from post p
         inner join public.user u on u.id = p."ownerId"
-        ${cursor ? `where p."createdAt" < $3` : ""}
+        ${cursor ? `where p."createdAt" < $${cursorIndex}` : ""}
         order by p."createdAt" DESC
         limit $1
     `,

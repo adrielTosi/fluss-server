@@ -43,9 +43,6 @@ const main = async () => {
   // await Post.delete({});
 
   const app = express();
-  app.listen(4000, () => {
-    console.log("app listen on port 4000");
-  });
 
   const RedisStore = redisStore(session);
   const redis = new Redis();
@@ -79,6 +76,10 @@ const main = async () => {
   apolloServer.applyMiddleware({
     app,
     cors: false,
+  });
+
+  app.listen(4000, () => {
+    console.log("app listen on port 4000");
   });
 };
 
