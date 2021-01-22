@@ -8,7 +8,7 @@ import {
   ManyToOne,
   OneToMany,
 } from "typeorm";
-import { ObjectType, Field } from "type-graphql";
+import { ObjectType, Field, Int } from "type-graphql";
 import { User } from "./User";
 import { Fame } from "./Fame";
 
@@ -30,6 +30,9 @@ export class Post extends BaseEntity {
   @Field()
   @Column({ type: "int", default: 1 })
   famePoints!: number;
+
+  @Field(() => Int, { nullable: true })
+  voteStatus: number | null;
 
   @Field(() => Number)
   @Column()

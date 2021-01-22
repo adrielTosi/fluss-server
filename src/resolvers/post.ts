@@ -34,40 +34,67 @@ class PaginatedPost {
   hasMore: boolean;
 }
 
+@ObjectType()
+class VoteResponse {
+  @Field(() => Boolean)
+  vote: boolean;
+
+  @Field(() => Int, { nullable: true })
+  currentCount?: number;
+}
+
 @Resolver(Post)
 export class PostResolver {
-  @Mutation(() => Boolean)
+  @Mutation(() => VoteResponse)
   @UseMiddleware(isLogged)
   async vote(
     @Arg("postId", () => Int) postId: number,
     @Arg("value", () => Int) value: number,
     @Ctx() { req }: MyContext
-  ) {
+  ): Promise<VoteResponse> {
     const isPositiveFame = value !== -1;
     const realValue = isPositiveFame ? 1 : -1;
     const { userId } = req.session;
 
-    // await getConnection().query(
-    //   `
-    //   update post
-    //   set "famePoints" = "famePoints" = $1
-    //   where id = $2
-    // `,
-    //   [realValue, postId]
-    // );
-
-    const insertFame = await Fame.insert({ userId, postId, value: realValue });
-    if (!insertFame) return false;
+    const famePointVote = await Fame.findOne({ where: { postId, userId } });
 
     const postToUpdate = await Post.findOne({ id: postId });
     if (!postToUpdate) {
-      return false;
+      return { vote: false };
     }
-    if (postToUpdate) {
+
+    // user has already voted but is changing the vote
+    if (famePointVote && famePointVote.value !== realValue) {
+      const updateFame = await Fame.update(
+        { postId, userId },
+        { value: realValue }
+      );
+
+      if (!updateFame) return { vote: false };
+
+      postToUpdate.famePoints = postToUpdate.famePoints + 2 * realValue;
+      famePointVote.value = realValue;
+    } else if (!famePointVote) {
+      // There is no vote yet, so the user has not voted on this post
+      // so normal logic to vote
+      const insertFame = await Fame.insert({
+        userId,
+        postId,
+        value: realValue,
+      });
+
+      if (!insertFame) {
+        return { vote: false };
+      }
+
       postToUpdate.famePoints = postToUpdate.famePoints + realValue;
     }
+
     await Post.save(postToUpdate);
-    return true;
+    return {
+      vote: true,
+      currentCount: postToUpdate.famePoints,
+    };
   }
 
   @FieldResolver(() => String)
@@ -85,12 +112,15 @@ export class PostResolver {
   @Query(() => PaginatedPost) // todo: Review this, looks not so good being data.posts.posts...
   async posts(
     @Arg("limit", () => Int) limit: number,
-    @Arg("cursor", () => String, { nullable: true }) cursor: string | null // actually a date value like `1610814686802`
+    @Arg("cursor", () => String, { nullable: true }) cursor: string | null, // actually a date value like `1610814686802`
+    @Ctx() { req }: MyContext
   ): Promise<PaginatedPost> {
     const realLimit = Math.min(50, limit) + 1;
     const realLimitPlusOne = realLimit + 1;
 
     const replacements: any[] = [realLimitPlusOne];
+
+    if (req.session.userId) replacements.push(req.session.userId);
     if (cursor) replacements.push(new Date(parseInt(cursor)));
 
     const posts = await getConnection().query(
@@ -99,10 +129,15 @@ export class PostResolver {
         json_build_object(
           'id', u.id,
           'username', u.username,
-          'email', u.email) as owner
+          'email', u.email) as owner,
+        ${
+          req.session.userId
+            ? `(select value from fame where "userId" = $2 and "postId" = p.id) "voteStatus"`
+            : "null as 'voteStatus'"
+        }
         from post p
         inner join public.user u on u.id = p."ownerId"
-        ${cursor ? `where p."createdAt" < $2` : ""}
+        ${cursor ? `where p."createdAt" < $3` : ""}
         order by p."createdAt" DESC
         limit $1
     `,

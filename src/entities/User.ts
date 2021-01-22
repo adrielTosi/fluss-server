@@ -35,6 +35,8 @@ export class User extends BaseEntity {
   @OneToMany(() => Fame, (fame) => fame.user)
   fame: Fame[];
 
+  // -------
+
   @Field(() => String)
   @CreateDateColumn()
   createdAt = Date();
