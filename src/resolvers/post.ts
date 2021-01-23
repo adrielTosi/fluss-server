@@ -175,8 +175,8 @@ export class PostResolver {
    * @Post
    */
   @Query(() => Post, { nullable: true })
-  post(@Arg("id") id: number): Promise<Post | undefined> {
-    return Post.findOne({ id });
+  post(@Arg("id", () => Int) id: number): Promise<Post | undefined> {
+    return Post.findOne({ id }, { relations: ["owner"] });
   }
 
   /**
@@ -209,7 +209,7 @@ export class PostResolver {
     }
 
     if (typeof title !== "undefined") {
-      Post.update({ id }, { title });
+      await Post.update({ id }, { title });
     }
     return post;
   }
@@ -217,12 +217,23 @@ export class PostResolver {
    * @DeletePost
    */
   @Mutation(() => Boolean)
-  async deletePost(@Arg("id") id: number): Promise<boolean> {
-    try {
-      Post.delete(id);
-    } catch {
+  @UseMiddleware(isLogged)
+  async deletePost(
+    @Arg("id", () => Int) id: number,
+    @Ctx() { req }: MyContext
+  ): Promise<boolean> {
+    const post = await Post.findOne(id);
+    if (!post) {
       return false;
     }
+
+    if (post.ownerId !== req.session.userId) {
+      // throw new Error("not authorized");
+      return false;
+    }
+
+    await Fame.delete({ postId: id });
+    await Post.delete({ id });
     return true;
   }
 }
