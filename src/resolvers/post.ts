@@ -151,20 +151,6 @@ export class PostResolver {
       replacements
     );
 
-    // const queryBuilder = getConnection()
-    //   .getRepository(Post)
-    //   .createQueryBuilder("p")
-    //   .innerJoinAndSelect("p.owner", "user", 'user.id = p."ownerId"') // todo: read about join wtf
-    //   .orderBy('p."createdAt"', "DESC")
-    //   .take(realLimitPlusOne);
-
-    // if (cursor) {
-    //   queryBuilder.where('p."createdAt" < :cursor', {
-    //     cursor: new Date(parseInt(cursor)),
-    //   });
-    // }
-    // const posts = await queryBuilder.getMany();
-
     return {
       posts: posts.slice(0, realLimit),
       hasMore: posts.length === realLimitPlusOne,
@@ -198,21 +184,27 @@ export class PostResolver {
    * @UpdatePost
    */
   @Mutation(() => Post, { nullable: true })
+  @UseMiddleware(isLogged)
   async updatePost(
     @Arg("title", () => String, { nullable: true }) title: string,
-    @Arg("id") id: number
+    @Arg("text", () => String, { nullable: true }) text: string,
+    @Arg("id", () => Int) id: number,
+    @Ctx() { req }: MyContext
   ): Promise<Post | undefined> {
-    const post = await Post.findOne(id);
+    const result = await getConnection()
+      .createQueryBuilder()
+      .update(Post)
+      .set({ title, text })
+      .returning("*")
+      .where('id = :id and "ownerId" = :ownerId', {
+        id,
+        ownerId: req.session.userId,
+      })
+      .execute();
 
-    if (!post) {
-      return undefined;
-    }
-
-    if (typeof title !== "undefined") {
-      await Post.update({ id }, { title });
-    }
-    return post;
+    return result.raw[0];
   }
+
   /**
    * @DeletePost
    */
