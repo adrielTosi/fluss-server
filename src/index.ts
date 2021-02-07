@@ -18,6 +18,9 @@ import { createConnection } from "typeorm";
 import { Post } from "./entities/Post";
 import { User } from "./entities/User";
 import { Fame } from "./entities/Fame";
+import { Planet } from "./entities/Planet";
+import { Profile } from "./entities/Profile";
+import { ProfileResolver } from "./resolvers/profile";
 
 declare module "express-session" {
   interface Session {
@@ -35,12 +38,15 @@ const main = async () => {
     logging: true,
     synchronize: true,
     migrations: [path.join(__dirname, "/migrations/*")],
-    entities: [Post, User, Fame],
+    entities: [Post, User, Fame, Planet, Profile],
   });
 
   await typeOrmConn.runMigrations();
 
+  // await Profile.delete({});
+  // await Fame.delete({});
   // await Post.delete({});
+  // await User.delete({});
 
   const app = express();
 
@@ -67,7 +73,7 @@ const main = async () => {
 
   const apolloServer = new ApolloServer({
     schema: await buildSchema({
-      resolvers: [HelloResolver, PostResolver, UserResolver],
+      resolvers: [HelloResolver, PostResolver, UserResolver, ProfileResolver],
       validate: false,
     }),
     context: ({ req, res }): MyContext => ({ req, res, redis }),

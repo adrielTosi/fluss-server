@@ -6,10 +6,13 @@ import {
   UpdateDateColumn,
   BaseEntity,
   OneToMany,
+  OneToOne,
+  JoinColumn,
 } from "typeorm";
 import { ObjectType, Field } from "type-graphql";
 import { Post } from "./Post";
 import { Fame } from "./Fame";
+import { Profile } from "./Profile";
 
 @ObjectType()
 @Entity()
@@ -35,8 +38,12 @@ export class User extends BaseEntity {
   @OneToMany(() => Fame, (fame) => fame.user)
   fame: Fame[];
 
-  // -------
+  @Field()
+  @OneToOne(() => Profile, (profile) => profile.user)
+  @JoinColumn()
+  profile: Profile;
 
+  // -------
   @Field(() => String)
   @CreateDateColumn()
   createdAt = Date();

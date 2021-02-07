@@ -14,6 +14,7 @@ import argon2 from "argon2";
 import { v4 as uuid } from "uuid";
 
 import { User } from "../entities/User";
+import { Profile } from "../entities/Profile";
 import { MyContext } from "../types";
 import { COOKIE_NAME, FORGOT_PASSWORD_PREFIX } from "../constants";
 import { sendEmail } from "../utils/sendEmail";
@@ -70,7 +71,7 @@ export class UserResolver {
    */
   @Query(() => [User])
   async users(): Promise<User[]> {
-    return User.find({});
+    return User.find({ relations: ["profile"] });
   }
 
   /**
@@ -151,21 +152,31 @@ export class UserResolver {
     // Has the password to store
     const hashedPassword = await argon2.hash(options.password);
 
-    let user;
+    let user: any = null;
     try {
-      // Turn this into convencional syntax
-      const result = await getConnection()
-        .createQueryBuilder()
-        .insert()
-        .into(User)
-        .values({
-          username: options.username,
-          email: options.email,
-          password: hashedPassword,
-        })
-        .returning("*")
-        .execute();
-      user = result.raw[0]; // The `raw` key is because we used "returnin('*')"
+      await getConnection().transaction(async (tem) => {
+        // Transaction Entity Manager
+        const qb = await tem.createQueryBuilder();
+        const newProfile = await qb
+          .insert()
+          .into(Profile)
+          .values({})
+          .returning("*")
+          .execute();
+
+        const userInsert = await qb
+          .insert()
+          .into(User)
+          .values({
+            username: options.username,
+            email: options.email,
+            password: hashedPassword,
+            profile: newProfile.raw[0].id,
+          })
+          .returning("*")
+          .execute();
+        user = userInsert.raw[0]; // The `raw` key is because we used "returnin('*')"
+      });
     } catch (err) {
       console.log("Error: ", err);
     }

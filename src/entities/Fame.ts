@@ -1,16 +1,7 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  UpdateDateColumn,
-  BaseEntity,
-  ManyToOne,
-  PrimaryColumn,
-} from "typeorm";
-import { ObjectType, Field } from "type-graphql";
-import { User } from "./User";
+import { Field, ObjectType } from "type-graphql";
+import { BaseEntity, Column, Entity, ManyToOne, PrimaryColumn } from "typeorm";
 import { Post } from "./Post";
+import { User } from "./User";
 
 /**
  * This is a many to many relationship
