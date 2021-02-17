@@ -1,10 +1,9 @@
 import { Field, ObjectType } from "type-graphql";
 import {
   BaseEntity,
-  Column,
   CreateDateColumn,
   Entity,
-  JoinColumn,
+  ManyToOne,
   OneToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
@@ -20,9 +19,8 @@ export class Profile extends BaseEntity {
   id!: number;
 
   @Field(() => Planet, { nullable: true })
-  @OneToOne(() => Planet)
-  @JoinColumn()
-  planet_of_origin: Planet;
+  @ManyToOne(() => Planet, (planet) => planet.id)
+  planetOfOrigin: Planet | number;
 
   @Field(() => User)
   @OneToOne(() => User, (user) => user.profile)

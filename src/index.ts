@@ -43,9 +43,9 @@ const main = async () => {
 
   await typeOrmConn.runMigrations();
 
-  // await Profile.delete({});
   // await Fame.delete({});
   // await Post.delete({});
+  // await Profile.delete({});
   // await User.delete({});
 
   const app = express();
@@ -57,7 +57,7 @@ const main = async () => {
     session({
       name: COOKIE_NAME,
       store: new RedisStore({ client: redis as any, disableTouch: true }), // I had to add this `as any` because the types were incompatible https://github.com/tj/connect-redis/issues/300
-      secret: "Sll2o955ltoSsslOejnn4E%",
+      secret: "Sll2o955ltoSsslOejnn4E%", //todo: extract to .env file
       cookie: {
         maxAge: 1000 * 60 * 60 * 24 * 14, // 14 days
         httpOnly: true,
