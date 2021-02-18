@@ -18,7 +18,7 @@ import { Profile } from "../entities/Profile";
 import { MyContext } from "../types";
 import { COOKIE_NAME, FORGOT_PASSWORD_PREFIX } from "../constants";
 import { sendEmail } from "../utils/sendEmail";
-import { getConnection } from "typeorm";
+import { createQueryBuilder, getConnection, getRepository } from "typeorm";
 
 @InputType()
 class UsernamePasswordInput {
@@ -71,38 +71,28 @@ export class UserResolver {
    */
   @Query(() => [User])
   async users(): Promise<User[]> {
-    const users = await getConnection().query(`
-      select u.*, 
-      json_build_object(
-        'id', p.id,
-        'createdAt', p."createdAt",
-        'updatedAt', p."updatedAt",
-        'planetOfOrigin', json_build_object(
-            'id', pl.id,
-            'name', pl.name,
-            'size', pl.size,
-            'createdAt', pl."createdAt",
-            'updatedAt', pl."updatedAt"
-          )
-        ) as profile
-      from public.user u
-      join profile p on u."profileId" = p."id"
-      left join planet pl on p."planetOfOriginId" = pl."id"
-      `);
-    console.log(">>>> users: ", users);
+    const users = await getRepository(User).find({
+      relations: ["profile", "profile.planetOfOrigin"],
+    });
+    return users;
     // const users = await getConnection().query(`
     //   select u.*,
     //   json_build_object(
     //     'id', p.id,
     //     'createdAt', p."createdAt",
     //     'updatedAt', p."updatedAt",
-    //     "planetOfOrigin", (inner join planet pl on p."planetOfOriginId" = p."id")
-    //     ) as profile,
+    //     'planetOfOrigin', json_build_object(
+    //         'id', pl.id,
+    //         'name', pl.name,
+    //         'size', pl.size,
+    //         'createdAt', pl."createdAt",
+    //         'updatedAt', pl."updatedAt"
+    //       )
+    //     ) as profile
     //   from public.user u
-    //   inner join profile p on u."profileId" = p."id"
-    // `);
-    return users;
-    // return User.find({ relations: ["profile"] });
+    //   join profile p on u."profileId" = p."id"
+    //   left join planet pl on p."planetOfOriginId" = pl."id"
+    //   `);
   }
 
   /**
