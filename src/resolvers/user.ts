@@ -12,6 +12,8 @@ import {
 } from "type-graphql";
 import argon2 from "argon2";
 import { v4 as uuid } from "uuid";
+import isLength from "validator/lib/isLength";
+import isEmail from "validator/lib/isEmail";
 
 import { User } from "../entities/User";
 import { Profile } from "../entities/Profile";
@@ -19,12 +21,13 @@ import { MyContext } from "../types";
 import { COOKIE_NAME, FORGOT_PASSWORD_PREFIX } from "../constants";
 import { sendEmail } from "../utils/sendEmail";
 import { getConnection, getRepository } from "typeorm";
-import { AuthenticationError, UserInputError } from "apollo-server-express";
+import { AuthenticationError } from "apollo-server-express";
 import {
   FlussUserInputError,
   UserInputErrorCode,
   UserInputOperation,
 } from "../utils/validation/FlussUserInputError";
+import { FlussError } from "../utils/validation/FlussError";
 
 @InputType()
 class UsernamePasswordInput {
@@ -113,7 +116,10 @@ export class UserResolver {
     const user = await User.findOne(req.session.userId);
 
     if (!user) {
-      throw new UserInputError("Invalid user.");
+      throw new FlussUserInputError("Invalid User.", {
+        operation: UserInputOperation.currentUser,
+        flussError: UserInputErrorCode.InvalidUser,
+      });
     }
 
     return user;
@@ -134,9 +140,6 @@ export class UserResolver {
       where: { username: options.username },
     });
 
-    // TODO: Create unique errors for these using `ApolloError()`
-    // https://www.apollographql.com/docs/apollo-server/data/errors/#other-errors
-    // Add validation for email -> add actual validation library
     if (foundUserByEmail) {
       throw new FlussUserInputError("This email is already taken.", {
         operation: UserInputOperation.register,
@@ -150,13 +153,17 @@ export class UserResolver {
       });
     }
 
-    if (options.username.length < 3) {
-      throw new FlussUserInputError("Username must be longer than 2 letters.", {
-        operation: UserInputOperation.register,
-        flussError: UserInputErrorCode.UsernameTooShort,
-      });
+    if (!isLength(options.username, { min: 2, max: 30 })) {
+      throw new FlussUserInputError(
+        "Username length must be between 2 and 30 chars.",
+        {
+          operation: UserInputOperation.register,
+          flussError: UserInputErrorCode.UsernameTooShort,
+        }
+      );
     }
-    if (options.password.length < 3) {
+
+    if (!isLength(options.password, { min: 3 })) {
       throw new FlussUserInputError(
         "Password must be longer than 2 characters.",
         {
@@ -166,7 +173,7 @@ export class UserResolver {
       );
     }
 
-    // Has the password to store
+    // Hash the password to store
     const hashedPassword = await argon2.hash(options.password);
 
     let user: any = null;
@@ -196,7 +203,7 @@ export class UserResolver {
         user = userInsert.raw[0]; // The `raw` key is because we used "returnin('*')"
       });
     } catch (err) {
-      console.log("Error: ", err);
+      throw new FlussError("Something went wrong. Refresh and try again.");
     }
 
     // Automatially log in user after registering.
@@ -208,6 +215,7 @@ export class UserResolver {
   /**
    * @Login
    * @param options UserNamePasswordInput
+   * TODO: Update this response, it will have user or give error now. So `UserResponse` is out of date
    */
   @Mutation(() => UserResponse, { nullable: true })
   async login(
@@ -216,16 +224,13 @@ export class UserResolver {
     @Ctx() { req }: MyContext
   ): Promise<UserResponse> {
     // Try finding an user based on the username
-    const isEmail = usernameOrEmail.includes("@");
+    const userEmail = isEmail(usernameOrEmail);
     const user = await User.findOne({
-      where: isEmail
+      where: userEmail
         ? { email: usernameOrEmail }
         : { username: usernameOrEmail },
     });
 
-    // todo: Add validation library
-    // If there is no user, return new UserResponse object
-    // with errors(type FieldError[]) and no user(type User)
     if (!user) {
       throw new FlussUserInputError("Username or email doesn't exists.", {
         operation: UserInputOperation.login,
@@ -233,7 +238,6 @@ export class UserResolver {
       });
     }
 
-    // Same thing but with invalid password
     const valid = await argon2.verify(user.password, password);
     if (!valid) {
       throw new FlussUserInputError("Password is incorrect.", {
@@ -275,8 +279,10 @@ export class UserResolver {
   ) {
     const user = await User.findOne({ where: { email } });
     if (!user) {
-      // email not in the database
-      return false;
+      throw new FlussUserInputError("Invalid User.", {
+        operation: UserInputOperation.forgotPassword,
+        flussError: UserInputErrorCode.InvalidUser,
+      });
     }
 
     const token = uuid();
@@ -295,11 +301,11 @@ export class UserResolver {
     @Arg("newPassword") newPassword: string,
     @Ctx() { redis, req }: MyContext
   ): Promise<UserResponse> {
-    if (newPassword.length < 3) {
+    if (isLength(newPassword, { min: 3 })) {
       throw new FlussUserInputError(
         "Password must be longer than 2 characters.",
         {
-          operation: UserInputOperation.register,
+          operation: UserInputOperation.changePassword,
           flussError: UserInputErrorCode.PasswordTooShort,
         }
       );

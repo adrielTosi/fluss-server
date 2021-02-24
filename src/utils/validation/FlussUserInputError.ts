@@ -6,6 +6,8 @@ export enum UserInputOperation {
   login = "LOGIN",
   changePassword = "CHANGE_PASSWORD",
   changeUsername = "CHANGE_USERNAME",
+  currentUser = "CURRENT_USER",
+  forgotPassword = "FORGOT_PASSWORD",
 }
 
 // * Error names
@@ -38,8 +40,19 @@ interface LoginErrorProperties extends ErrorProperties {
 
 interface ChagePasswordErrorProperties extends ErrorProperties {
   operation: UserInputOperation.changePassword;
+  flussError:
+    | UserInputErrorCode.InvalidUser
+    | UserInputErrorCode.PasswordTooShort;
+}
+interface CurrentUserProperties extends ErrorProperties {
+  operation: UserInputOperation.currentUser;
   flussError: UserInputErrorCode.InvalidUser;
 }
+interface ForgotPasswordProperties extends ErrorProperties {
+  operation: UserInputOperation.forgotPassword;
+  flussError: UserInputErrorCode.InvalidUser;
+}
+
 // * ----
 
 interface ErrorProperties {
@@ -50,12 +63,13 @@ interface ErrorProperties {
 export type UserInputErrorProperties =
   | RegisterErrorProperties
   | LoginErrorProperties
-  | ChagePasswordErrorProperties;
+  | ChagePasswordErrorProperties
+  | CurrentUserProperties
+  | ForgotPasswordProperties;
 
 export class FlussUserInputError extends UserInputError {
   constructor(message: string, properties: UserInputErrorProperties) {
     super(message, properties);
-    Object.defineProperty(this, "name", { value: "FlussUserInputError" });
   }
 }
 
