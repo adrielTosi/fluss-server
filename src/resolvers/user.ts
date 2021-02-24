@@ -18,7 +18,13 @@ import { Profile } from "../entities/Profile";
 import { MyContext } from "../types";
 import { COOKIE_NAME, FORGOT_PASSWORD_PREFIX } from "../constants";
 import { sendEmail } from "../utils/sendEmail";
-import { createQueryBuilder, getConnection, getRepository } from "typeorm";
+import { getConnection, getRepository } from "typeorm";
+import { AuthenticationError, UserInputError } from "apollo-server-express";
+import {
+  FlussUserInputError,
+  UserInputErrorCode,
+  UserInputOperation,
+} from "../utils/validation/FlussUserInputError";
 
 @InputType()
 class UsernamePasswordInput {
@@ -100,14 +106,15 @@ export class UserResolver {
    */
   @Query(() => User, { nullable: true })
   async currentUser(@Ctx() { req }: MyContext): Promise<User | undefined> {
-    // Not logged in
     if (!req.session.userId) {
-      return undefined;
+      throw new AuthenticationError("Not authenticated.");
     }
 
-    const user = await User.findOne({ id: req.session.userId });
+    const user = await User.findOne(req.session.userId);
 
-    if (!user) return undefined;
+    if (!user) {
+      throw new UserInputError("Invalid user.");
+    }
 
     return user;
   }
@@ -126,48 +133,37 @@ export class UserResolver {
     const foundUserByUsername = await User.findOne({
       where: { username: options.username },
     });
-    // todo: Add validation for email -> add actual validation library
 
+    // TODO: Create unique errors for these using `ApolloError()`
+    // https://www.apollographql.com/docs/apollo-server/data/errors/#other-errors
+    // Add validation for email -> add actual validation library
     if (foundUserByEmail) {
-      return {
-        errors: [
-          {
-            field: "email",
-            message: "This email is already taken.",
-          },
-        ],
-      };
+      throw new FlussUserInputError("This email is already taken.", {
+        operation: UserInputOperation.register,
+        flussError: UserInputErrorCode.EmailExists,
+      });
     }
     if (foundUserByUsername) {
-      return {
-        errors: [
-          {
-            field: "username",
-            message: "This username already exists.",
-          },
-        ],
-      };
+      throw new FlussUserInputError("This username already exists.", {
+        operation: UserInputOperation.register,
+        flussError: UserInputErrorCode.UsernameExists,
+      });
     }
 
     if (options.username.length < 3) {
-      return {
-        errors: [
-          {
-            field: "username",
-            message: "Username must be longer than 2 letters.",
-          },
-        ],
-      };
+      throw new FlussUserInputError("Username must be longer than 2 letters.", {
+        operation: UserInputOperation.register,
+        flussError: UserInputErrorCode.UsernameTooShort,
+      });
     }
     if (options.password.length < 3) {
-      return {
-        errors: [
-          {
-            field: "password",
-            message: "Password must be longer than 2 characters.",
-          },
-        ],
-      };
+      throw new FlussUserInputError(
+        "Password must be longer than 2 characters.",
+        {
+          operation: UserInputOperation.register,
+          flussError: UserInputErrorCode.PasswordTooShort,
+        }
+      );
     }
 
     // Has the password to store
@@ -231,27 +227,19 @@ export class UserResolver {
     // If there is no user, return new UserResponse object
     // with errors(type FieldError[]) and no user(type User)
     if (!user) {
-      return {
-        errors: [
-          {
-            field: "usernameOrEmail",
-            message: "Username doesn't exist.",
-          },
-        ],
-      };
+      throw new FlussUserInputError("Username or email doesn't exists.", {
+        operation: UserInputOperation.login,
+        flussError: UserInputErrorCode.InvalidEmailOrUsername,
+      });
     }
 
     // Same thing but with invalid password
     const valid = await argon2.verify(user.password, password);
     if (!valid) {
-      return {
-        errors: [
-          {
-            field: "password",
-            message: "Password is incorrect.",
-          },
-        ],
-      };
+      throw new FlussUserInputError("Password is incorrect.", {
+        operation: UserInputOperation.login,
+        flussError: UserInputErrorCode.InvalidPassword,
+      });
     }
 
     req.session.userId = user.id;
@@ -308,41 +296,35 @@ export class UserResolver {
     @Ctx() { redis, req }: MyContext
   ): Promise<UserResponse> {
     if (newPassword.length < 3) {
-      return {
-        errors: [
-          {
-            field: "newPassword",
-            message: "Password must be longer than 2 characters.",
-          },
-        ],
-      };
+      throw new FlussUserInputError(
+        "Password must be longer than 2 characters.",
+        {
+          operation: UserInputOperation.register,
+          flussError: UserInputErrorCode.PasswordTooShort,
+        }
+      );
     }
 
     const key = FORGOT_PASSWORD_PREFIX + token;
     const userId = await redis.get(key);
 
     if (!userId) {
-      return {
-        errors: [
-          {
-            field: "token",
-            message: "Token is invalid or expired, please try again.",
-          },
-        ],
-      };
+      throw new FlussUserInputError(
+        "Token is invalid or expired, please try again.",
+        {
+          operation: UserInputOperation.changePassword,
+          flussError: UserInputErrorCode.InvalidUser,
+        }
+      );
     }
     const intId = parseInt(userId);
     const user = await User.findOne({ id: intId });
 
     if (!user) {
-      return {
-        errors: [
-          {
-            field: "token",
-            message: "User no longer exists.",
-          },
-        ],
-      };
+      throw new FlussUserInputError("User no longer exists.", {
+        operation: UserInputOperation.changePassword,
+        flussError: UserInputErrorCode.InvalidUser,
+      });
     }
 
     const hash = await argon2.hash(newPassword);
@@ -361,27 +343,19 @@ export class UserResolver {
   ): Promise<UserResponse> {
     const user = await User.findOne({ id: req.session.userId });
     if (!user) {
-      return {
-        errors: [
-          {
-            field: "newUsername",
-            message: "Something went wrong, please try again.",
-          },
-        ],
-      };
+      throw new FlussUserInputError("Something went wrong, please try again.", {
+        operation: UserInputOperation.changePassword,
+        flussError: UserInputErrorCode.InvalidUser,
+      });
     }
 
     const isTaken = await User.findOne({ where: { username: newUsername } });
 
     if (isTaken) {
-      return {
-        errors: [
-          {
-            field: "newUsername",
-            message: "Username already exists.",
-          },
-        ],
-      };
+      throw new FlussUserInputError("This username already exists.", {
+        operation: UserInputOperation.register,
+        flussError: UserInputErrorCode.UsernameExists,
+      });
     }
 
     user.username = newUsername;

@@ -1,5 +1,5 @@
 import isLogged from "../middlewear/isLogged";
-import { MyContext } from "src/types";
+import { MyContext } from "../types";
 import {
   Arg,
   Ctx,
@@ -14,6 +14,11 @@ import { Profile } from "../entities/Profile";
 import { User } from "../entities/User";
 import { Planet } from "../entities/Planet";
 import { getConnection } from "typeorm";
+import {
+  FlussUserInputError,
+  UserInputOperation,
+  UserInputErrorCode,
+} from "../utils/validation/FlussUserInputError";
 
 @InputType()
 class UpdateProfileInput {
@@ -34,21 +39,25 @@ export class ProfileResolver {
       where: { id: req.session.userId },
       relations: ["profile"],
     });
-    console.log(" >>>> !user", user);
+
     if (!user) {
-      console.log(" >>>> !user", user);
-      // todo: I need a better and consistent way to deal with errors
-      return null;
+      throw new FlussUserInputError("Invalid user.", {
+        operation: UserInputOperation.changePassword,
+        flussError: UserInputErrorCode.InvalidUser,
+      });
     }
 
     // Check if user owns the profile
+    // ? Is this necessary
     const relatedProfile = await Profile.findOne({
       where: { id: user.profile.id },
     });
-    console.log(" >>>> relatedProfile", relatedProfile);
+
     if (!relatedProfile) {
-      console.log(" >>>> !relatedProfile", relatedProfile);
-      return null;
+      throw new FlussUserInputError("Invalid user.", {
+        operation: UserInputOperation.changePassword,
+        flussError: UserInputErrorCode.InvalidUser,
+      });
     }
 
     let planetOfOrigin: undefined | Planet = undefined;
@@ -71,9 +80,19 @@ export class ProfileResolver {
     return relatedProfile;
   }
 
-  @Query(() => String)
-  async profile(@Ctx() { req }: MyContext): Promise<Profile | undefined> {
-    const profile = Profile.findOne({ where: { user: req.session.userId } });
-    return profile;
+  @Query(() => Profile)
+  @UseMiddleware(isLogged)
+  async profile(@Ctx() { req }: MyContext): Promise<Profile> {
+    const currentUser = await User.findOne({
+      where: { id: req.session.userId },
+      relations: ["profile", "profile.planetOfOrigin", "profile.user"],
+    });
+    if (!currentUser) {
+      throw new FlussUserInputError("Invalid user.", {
+        operation: UserInputOperation.changePassword,
+        flussError: UserInputErrorCode.InvalidUser,
+      });
+    }
+    return currentUser.profile;
   }
 }

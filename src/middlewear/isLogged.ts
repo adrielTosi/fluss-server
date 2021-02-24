@@ -1,4 +1,5 @@
 import { MyContext } from "src/types";
+import { AuthenticationError } from "apollo-server-express";
 import { MiddlewareFn } from "type-graphql";
 
 export const isLoggedIn: MiddlewareFn<MyContext> = async (
@@ -6,7 +7,7 @@ export const isLoggedIn: MiddlewareFn<MyContext> = async (
   next
 ) => {
   if (!context.req.session.userId) {
-    throw new Error("Not authenticated.");
+    throw new AuthenticationError("Not authenticated.");
   }
 
   return next();

@@ -17,6 +17,12 @@ import {
 import { Post } from "../entities/Post";
 import { getConnection } from "typeorm";
 import { Fame } from "../entities/Fame";
+import {
+  FlussUserInputError,
+  UserInputOperation,
+  UserInputErrorCode,
+} from "../utils/validation/FlussUserInputError";
+import { FlussError } from "../utils/validation/FlussError";
 
 @InputType()
 class PostInput {
@@ -60,7 +66,7 @@ export class PostResolver {
 
     const postToUpdate = await Post.findOne({ id: postId });
     if (!postToUpdate) {
-      return { vote: false };
+      throw new FlussError("Something went wrong. Refresh and try again.");
     }
 
     // user has already voted but is changing the vote
@@ -70,7 +76,9 @@ export class PostResolver {
         { value: realValue }
       );
 
-      if (!updateFame) return { vote: false };
+      if (!updateFame) {
+        throw new FlussError("Something went wrong. Refresh and try again.");
+      }
 
       postToUpdate.famePoints = postToUpdate.famePoints + 2 * realValue;
       famePointVote.value = realValue;
@@ -84,7 +92,7 @@ export class PostResolver {
       });
 
       if (!insertFame) {
-        return { vote: false };
+        throw new FlussError("Something went wrong. Refresh and try again.");
       }
 
       postToUpdate.famePoints = postToUpdate.famePoints + realValue;
@@ -109,12 +117,13 @@ export class PostResolver {
    *
    * @returns all Posts before the date `cursor` represents
    */
-  @Query(() => PaginatedPost) // todo: Review this, looks not so good being data.posts.posts...
+  @Query(() => PaginatedPost)
   async posts(
     @Arg("limit", () => Int) limit: number,
     @Arg("cursor", () => String, { nullable: true }) cursor: string | null, // actually a date value like `1610814686802`
     @Ctx() { req }: MyContext
   ): Promise<PaginatedPost> {
+    // TODO: REFACTOR THE WHOLE SELECT QUERY LOGIC
     const realLimit = Math.min(50, limit) + 1;
     const realLimitPlusOne = realLimit + 1;
 
@@ -126,7 +135,6 @@ export class PostResolver {
       replacements.push(new Date(parseInt(cursor)));
       cursorIndex = replacements.length;
     }
-
     const posts = await getConnection().query(
       `
         select p.*, 
@@ -216,12 +224,14 @@ export class PostResolver {
   ): Promise<boolean> {
     const post = await Post.findOne(id);
     if (!post) {
-      return false;
+      throw new FlussError("Something went wrong. Refresh and try again.");
     }
 
     if (post.ownerId !== req.session.userId) {
-      // throw new Error("not authorized");
-      return false;
+      throw new FlussUserInputError("Invalid user.", {
+        operation: UserInputOperation.changePassword,
+        flussError: UserInputErrorCode.InvalidUser,
+      });
     }
 
     await Fame.delete({ postId: id });
