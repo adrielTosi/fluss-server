@@ -18,7 +18,7 @@ import isEmail from "validator/lib/isEmail";
 import { User } from "../entities/User";
 import { Profile } from "../entities/Profile";
 import { MyContext } from "../types";
-import { COOKIE_NAME, FORGOT_PASSWORD_PREFIX } from "../constants";
+import { FORGOT_PASSWORD_PREFIX } from "../constants";
 import { sendEmail } from "../utils/sendEmail";
 import { getConnection, getRepository } from "typeorm";
 import { AuthenticationError } from "apollo-server-express";
@@ -260,7 +260,7 @@ export class UserResolver {
     return new Promise((resolve) =>
       req.session.destroy((err) => {
         // ? Should the cookie be deleted even if the session was not destroyed. If yes, should be move to below the if statement
-        res.clearCookie(COOKIE_NAME);
+        res.clearCookie(process.env.COOKIE_NAME!);
 
         if (err) {
           console.log(err);

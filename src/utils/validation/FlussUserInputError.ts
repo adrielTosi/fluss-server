@@ -72,5 +72,3 @@ export class FlussUserInputError extends UserInputError {
     super(message, properties);
   }
 }
-
-// TODO: EXPORT THE ERRORS ALREADY CREATED TO BE EASIER TO CALL INSIDE THE RESOLVERS

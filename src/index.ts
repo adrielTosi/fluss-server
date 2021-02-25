@@ -6,8 +6,9 @@ import redisStore from "connect-redis";
 import { buildSchema } from "type-graphql";
 import { ApolloServer } from "apollo-server-express";
 import path from "path";
+import dotenv from "dotenv";
 
-import { COOKIE_NAME, __prod__ } from "./constants";
+import { __prod__ } from "./constants";
 import { HelloResolver } from "./resolvers/hello";
 import { PostResolver } from "./resolvers/post";
 import { UserResolver } from "./resolvers/user";
@@ -30,11 +31,12 @@ declare module "express-session" {
 
 const main = async () => {
   // const conn = await createConnection({
+  dotenv.config();
   const typeOrmConn = await createConnection({
     type: "postgres",
-    database: "flussdb",
-    username: "postgres",
-    password: "postgress",
+    database: process.env.DATABASE_NAME,
+    username: process.env.DATABASE_USERNAME,
+    password: process.env.DATABASE_PASSWORD,
     logging: true,
     synchronize: true,
     migrations: [path.join(__dirname, "/migrations/*")],
@@ -55,9 +57,9 @@ const main = async () => {
 
   app.use(
     session({
-      name: COOKIE_NAME,
+      name: process.env.COOKIE_NAME,
       store: new RedisStore({ client: redis as any, disableTouch: true }), // I had to add this `as any` because the types were incompatible https://github.com/tj/connect-redis/issues/300
-      secret: "Sll2o955ltoSsslOejnn4E%", //todo: extract to .env file
+      secret: process.env.SESSION_SECRET!,
       cookie: {
         maxAge: 1000 * 60 * 60 * 24 * 14, // 14 days
         httpOnly: true,
@@ -69,7 +71,7 @@ const main = async () => {
     })
   );
 
-  app.use(cors({ origin: "http://localhost:3000", credentials: true }));
+  app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
 
   const apolloServer = new ApolloServer({
     schema: await buildSchema({
@@ -84,8 +86,9 @@ const main = async () => {
     cors: false,
   });
 
-  app.listen(4000, () => {
-    console.log("app listen on port 4000");
+  const port = process.env.PORT || 4000;
+  app.listen(port, () => {
+    console.log("app listen on port: ", port);
   });
 };
 
